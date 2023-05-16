@@ -1,0 +1,77 @@
+#WHEN DO TRANSACTIONS FAIL?
+
+select block_timestamp::date as DATE, count(tx_id) as transaction_volume, count(case when succeeded = 'true' then tx_id END) as success_volume from solana.fact_transactions
+group by DATE
+order by date
+
+#STABLECOIN POPULARITY
+
+select block_timestamp::date as date, count(tx_id) as USDC_transactions
+from solana.fact_transfers
+where mint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+group by DATE
+order by DATE;
+
+select block_timestamp::date as date, count(tx_id) as USDT_transactions
+from solana.fact_transfers
+where mint = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'
+group by DATE
+order by DATE;
+
+select block_timestamp::date as date, count(tx_id) as UST_transactions
+from solana.fact_transfers
+where (
+  mint = '9vMJfxuKxXBoEa7rM12mYLMwTacLMLDJqHozw96WQL8i'
+  or mint = 'CXLBjMMcwkc17GfJtBos6rQCo1ypeH6eDbB82Kby4MRm'
+  )
+group by DATE
+order by DATE;
+
+#ACTIVE WALLET GROWTH
+
+select block_timestamp::date AS DATE, count(distinct signers) as active_wallets from solana.fact_transactions
+group by DATE
+order by date
+
+#SOLANA FEES
+
+select block_timestamp::date as date, sum(fee) as Acc_Fee, avg(fee) as Avg_Fee, count(tx_id) as Total_Transactions from solana.fact_transactions
+group by DATE
+order by date
+
+#% OF SOLANA STAKED
+
+select block_timestamp::date as date, 
+	count(tx_id) As transactions, 
+	count(case when event_type = 'delegate' then tx_id END) AS staked_transactions, 
+  	count(case when event_type = 'delegate' OR event_type = 'deactivate' OR event_type='split' OR event_type = 'merge' then tx_id END) AS staked_involved_transactions
+  from solana.fact_events
+group by DATE
+order by date
+
+SELECT
+  avg(instruction:parsed:info:lamports/1000000000) amt_staked
+  FROM solana.fact_events WHERE instruction:parsed:info:lamports is not null and event_type='split'
+
+#SOLANA TPS
+SELECT block_timestamp::date as date, count(tx_id) / 86400 As tps_non_votes, count(case when succeeded = 'true' then tx_id END) / 86400 AS tps_success
+from solana.fact_transactions
+Group by date
+ORDER by DATE
+
+#L1 UNIQUE USERS
+select terra.date, terra.terra_wallets, solana.solana_wallets, ethereum.ethereum_wallets
+from (select block_timestamp::date as date, count(distinct tx_from[0]) as terra_wallets
+  FROM flipside_prod_db.terra.transactions
+group by DATE) as terra full outer join
+
+(select block_timestamp::date as date, count(distinct signers) as solana_wallets
+  FROM solana.core.fact_transactions
+group by DATE) as solana on terra.date = solana.date full outer join
+
+(select block_timestamp::date as date, count(distinct from_address) as ethereum_wallets
+  FROM ethereum.core.fact_transactions
+group by DATE) as ethereum on terra.date = ethereum.DATE
+order by date
+
+
